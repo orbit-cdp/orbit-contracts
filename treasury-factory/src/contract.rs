@@ -41,7 +41,7 @@ pub trait TreasuryFactory {
     ///
     /// # Arguments
     /// * `treasury_id` - The contract address to be checked
-    fn is_treasury(e: Env, treasury_id: Address) -> bool;
+    fn get_treasury(e: Env, token: Address) -> Address;
 }
 
 #[contractimpl]
@@ -51,6 +51,9 @@ impl TreasuryFactory for TreasuryFactoryContract {
         if storage::get_is_init(&e) {
             panic_with_error!(&e, TreasuryFactoryError::AlreadyInitializedError);
         }
+
+        let pegkeeper = Address::default(); // TODO: Deploy probably conmtract wasm as argument of init
+        storage::set_pegkeeper(&e, &pegkeeper);
 
         storage::set_admin(&e, &admin);
         storage::set_pool_init_meta(&e, &treasury_init_meta);
@@ -68,6 +71,7 @@ impl TreasuryFactory for TreasuryFactoryContract {
 
         let treasury_init_meta = storage::get_pool_init_meta(&e);
         let treasury_hash = treasury_init_meta.treasury_hash;
+        let pegkeeper = storage::get_pegkeeper(&e);
         let treasury_id = e.deployer().with_current_contract(salt).deploy(treasury_hash);
         
         // Check if it is a blend pool
@@ -86,12 +90,13 @@ impl TreasuryFactory for TreasuryFactoryContract {
         let treasury_init_args = vec![
             &e,
             admin.into_val(&e),
+            pegkeeper.into_val(&e),
             token_address.into_val(&e),
             blend_pool.into_val(&e),
         ];
         e.invoke_contract::<Val>(&treasury_id, &Symbol::new(&e, "initialize"), treasury_init_args);
         
-        storage::set_deployed(&e, &treasury_id);
+        storage::set_deployed(&e, &token_address, &treasury_id);
         treasury_id
     }
 
@@ -104,8 +109,8 @@ impl TreasuryFactory for TreasuryFactoryContract {
         storage::set_admin(&e, &new_admin);
     }
 
-    fn is_treasury(e: Env, treasury_id: Address) -> bool {
+    fn get_treasury(e: Env, token: Address) -> Address {
         storage::extend_instance(&e);
-        storage::is_deployed(&e, &treasury_id)
+        storage::get_treasury(&e, &token)
     }
 }

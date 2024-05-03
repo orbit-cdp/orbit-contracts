@@ -10,7 +10,7 @@ const ADMIN_KEY: &str = "Admin";
 #[derive(Clone)]
 #[contracttype]
 pub enum TreasuryFactoryDataKey {
-    Contracts(Address),
+    Tokens(Address),
 }
 
 #[derive(Clone)]
@@ -75,23 +75,36 @@ pub fn set_pool_init_meta(e: &Env, pool_init_meta: &TreasuryInitMeta) {
         .set::<Symbol, TreasuryInitMeta>(&Symbol::new(e, "TreasuryMeta"), pool_init_meta)
 }
 
+pub fn get_pegkeeper(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .get::<Symbol, Address>(&Symbol::new(e, "Pegkeeper"))
+        .unwrap_optimized()
+}
+
+pub fn set_pegkeeper(e: &Env, pegkeeper: &Address) {
+    e.storage()
+        .instance()
+        .set::<Symbol, Address>(&Symbol::new(e, "Pegkeeper"), pegkeeper);
+}
+
 /// Check if a given contract_id was deployed by the factory
 ///
 /// ### Arguments
 /// * `contract_id` - The contract_id to check
-pub fn is_deployed(e: &Env, contract_id: &Address) -> bool {
-    let key = TreasuryFactoryDataKey::Contracts(contract_id.clone());
+pub fn get_treasury(e: &Env, token: &Address) -> Address {
+    let key = TreasuryFactoryDataKey::Tokens(token.clone());
     if let Some(result) = e
         .storage()
         .persistent()
-        .get::<TreasuryFactoryDataKey, bool>(&key)
+        .get::<TreasuryFactoryDataKey, Address>(&key)
     {
         e.storage()
             .persistent()
             .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);
         result
     } else {
-        false
+        Address::default() //TODO: Panic!
     }
 }
 
@@ -99,11 +112,11 @@ pub fn is_deployed(e: &Env, contract_id: &Address) -> bool {
 ///
 /// ### Arguments
 /// * `contract_id` - The contract_id that was deployed by the factory
-pub fn set_deployed(e: &Env, contract_id: &Address) {
-    let key = TreasuryFactoryDataKey::Contracts(contract_id.clone());
+pub fn set_deployed(e: &Env, token: &Address, contract_id: &Address) {
+    let key = TreasuryFactoryDataKey::Tokens(token.clone());
     e.storage()
         .persistent()
-        .set::<TreasuryFactoryDataKey, bool>(&key, &true);
+        .set::<TreasuryFactoryDataKey, bool>(&key, &contract_id);
     e.storage()
         .persistent()
         .extend_ttl(&key, LEDGER_THRESHOLD, LEDGER_BUMP);

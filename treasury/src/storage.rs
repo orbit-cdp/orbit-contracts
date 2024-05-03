@@ -7,7 +7,12 @@ pub(crate) const LEDGER_BUMP_SHARED: u32 = 241920; // ~ 14 days
 const ADMIN_KEY: &str = "Admin";
 const BLEND_KEY: &str = "Blend";
 const TOKEN_KEY: &str = "Token";
+
+const PEGKEEPER_KEY: &str = "PegKeeper";
+
 const TOKEN_SUPPLY_KEY: &str = "TokenSupply";
+
+const PEGKEEPER_DEBT_KEY: &str = "PegKeeperDebt";
 
 /// Bump the instance rent for the contract
 pub fn extend_instance(e: &Env) {
@@ -106,4 +111,38 @@ pub fn set_blend(e: &Env, blend: &Address) {
     e.storage()
         .instance()
         .set::<Symbol, Address>(&Symbol::new(e, BLEND_KEY), blend);
+}
+
+/********** PegKeeper **********/
+
+/// Fetch the current PegKeeper Address
+pub fn get_pegkeeper(e: &Env) -> Address {
+    e.storage()
+        .instance()
+        .get(&Symbol::new(e, PEGKEEPER_KEY))
+        .unwrap_optimized()
+}
+
+/// Set the PegKeeper Address
+pub fn set_pegkeeper(e: &Env, pegkeeper: &Address) {
+    e.storage()
+        .instance()
+        .set::<Symbol, Address>(&Symbol::new(e, PEGKEEPER_KEY), pegkeeper);
+}
+
+/********** PegKeeper Debt **********/
+
+/// Fetch the current PegKeeper debt
+pub fn get_pegkeeper_debt(e: &Env) -> i128 {
+    e.storage()
+        .instance()
+        .get(&Symbol::new(e, PEGKEEPER_DEBT_KEY))
+        .unwrap_optimized()
+}
+
+/// Set the PegKeeper debt
+pub fn set_pegkeeper_debt(e: &Env, debt: &i128) {
+    e.storage()
+        .instance()
+        .set::<Symbol, i128>(&Symbol::new(e, PEGKEEPER_DEBT_KEY), debt);
 }

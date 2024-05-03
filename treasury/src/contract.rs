@@ -18,7 +18,7 @@ pub trait Treasury {
     /// * `token` - The Address for the token
     /// * `blend_pool` - The Address for the blend pool
     ///
-    fn initialize(e: Env, admin: Address, token: Address, blend_pool: Address);
+    fn initialize(e: Env, admin: Address, pegkeeper: Address, token: Address, blend_pool: Address);
 
     /// (Admin only) Set a new address as the admin of this pool
     ///
@@ -37,6 +37,10 @@ pub trait Treasury {
     /// ### Panics
     /// If the caller is not the admin
     fn increase_supply(e: Env, amount: i128);
+
+    fn flash_loan(e: Env, amount: i128);
+
+    fn repay_flash_loan(e: Env, amount: i128);
 
     /// (Admin only) Decrease the supply of the pool
     ///
@@ -58,10 +62,11 @@ pub trait Treasury {
 #[contractimpl]
 impl Treasury for TreasuryContract {
 
-    fn initialize(e: Env, admin: Address, token: Address, blend_pool: Address) {
+    fn initialize(e: Env, admin: Address, pegkeeper: Address, token: Address, blend_pool: Address) {
         storage::extend_instance(&e);
 
         storage::set_admin(&e, &admin);
+        storage::set_pegkeeper(&e, &pegkeeper);
         storage::set_blend(&e, &blend_pool);
         storage::set_token(&e, &token);
         storage::set_token_supply(&e, &0);
@@ -116,6 +121,71 @@ impl Treasury for TreasuryContract {
         storage::set_token_supply(&e, &new_supply);
 
         //e.events().publish(Symbol::new(&e, "increase_supply"), admin);
+    }
+
+    fn flash_loan(e: Env, amount: i128) {
+        storage::extend_instance(&e);
+
+        let pegkeeper = storage::get_pegkeeper(&e);
+        pegkeeper.require_auth();
+        let token = storage::get_token(&e);
+        let debt = storage::get_pegkeeper_debt(&e);
+
+        //TODO: Debt limit?
+
+        let token_client = StellarAssetClient::new(&e, &token);
+        token_client.mint(&e.current_contract_address(), &amount);
+        let args: Vec<Val> = vec![
+            &e,
+            e.current_contract_address().into_val(&e),
+            pegkeeper.into_val(&e),
+            amount.into_val(&e),
+        ];
+        e.authorize_as_current_contract(vec![
+            &e,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token.clone(),
+                    fn_name: Symbol::new(&e, "transfer"),
+                    args: args.clone(),
+                },
+                sub_invocations: vec![&e],
+            })
+        ]);
+        // Transfer tokens to pegkeeper
+        let new_debt = debt + amount;
+        storage::set_pegkeeper_debt(&e, &new_debt);
+    }
+
+    fn repay_flash_loan(e: Env, amount: i128) {
+        storage::extend_instance(&e);
+
+        let pegkeeper = storage::get_pegkeeper(&e);
+        pegkeeper.require_auth();
+        let token = storage::get_token(&e);
+        let debt = storage::get_pegkeeper_debt(&e);
+
+        let token_client = StellarAssetClient::new(&e, &token);
+        token_client.burn(&e.current_contract_address(), &amount);
+        let args: Vec<Val> = vec![
+            &e,
+            e.current_contract_address().into_val(&e),
+            amount.into_val(&e),
+        ];
+        e.authorize_as_current_contract(vec![
+            &e,
+            InvokerContractAuthEntry::Contract(SubContractInvocation {
+                context: ContractContext {
+                    contract: token.clone(),
+                    fn_name: Symbol::new(&e, "burn"),
+                    args: args.clone(),
+                },
+                sub_invocations: vec![&e],
+            })
+        ]);
+        // Transfer tokens to pegkeeper
+        let new_debt = debt - amount;
+        storage::set_pegkeeper_debt(&e, &new_debt);
     }
 
     fn decrease_supply(e: Env, amount: i128) {
