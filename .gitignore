@@ -1,2 +1,7 @@
 /target
 .soroban
+.old
+*.old
+*.old.ts
+*.old.js
+js
