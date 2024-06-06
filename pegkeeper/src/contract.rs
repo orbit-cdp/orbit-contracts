@@ -1,4 +1,5 @@
 use soroban_sdk::{contract, contractclient, contractimpl, vec, Address, Env, Symbol, Vec, Val, IntoVal};
+use crate::dependencies::treasury::{Client as TreasuryClient};
 use crate::storage;
 
 #[contract]
@@ -31,6 +32,11 @@ impl PegKeeper for PegKeeperContract {
     fn liquidation_trade(e: Env, liquidation: Address) {
         //TODO: Liquidate and sell on AMM
         storage::extend_instance(&e);
+
+        let treasury = storage::get_treasury(&e);
+        let treasuryClient = TreasuryClient::new(&e, &treasury);
+        //TODO: Get pool from treasury
+
         let token = storage::get_token(&e);
         let amm = storage::get_amm(&e);
 

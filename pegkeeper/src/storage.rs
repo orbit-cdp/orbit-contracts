@@ -16,7 +16,7 @@ pub fn extend_instance(env: &Env) {
         .extend_ttl(LEDGER_THRESHOLD_SHARED, LEDGER_BUMP_SHARED);
 }
 
-pub fn get_trerasury(env: &Env) -> Address {
+pub fn get_treasury(env: &Env) -> Address {
     env.storage()
         .instance()
         .get(&Symbol::new(env, TREASURY_KEY))
