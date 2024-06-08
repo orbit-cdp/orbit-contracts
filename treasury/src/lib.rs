@@ -5,5 +5,6 @@ mod storage;
 mod contract;
 mod dependencies;
 mod errors;
+mod supply;
 
 pub use contract::*;
