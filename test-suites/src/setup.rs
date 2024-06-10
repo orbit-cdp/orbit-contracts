@@ -59,8 +59,17 @@ pub fn create_fixture_with_data<'a>() -> TestFixture<'a> {
     fixture.create_pool_reserve(0, TokenIndex::OUSD, &ousd_config);
     fixture.create_pool_reserve(0, TokenIndex::XLM, &xlm_config);
 
-    // enable emissions for pool
+
+    fixture.create_pair(TokenIndex::OUSD, TokenIndex::USDC);
+    let pair = &fixture.pairs[0].pair;
     let pool_fixture = &fixture.pools[0];
+
+    let deposit_amount = 6_000_0000 * SCALAR_7;
+    fixture.tokens[TokenIndex::OUSD].mint(&pair.address, &(deposit_amount));
+    fixture.tokens[TokenIndex::USDC].mint(&pair.address, &(deposit_amount));
+    pair.deposit(&frodo);
+
+    // enable emissions for pool
     let reserve_emissions: soroban_sdk::Vec<ReserveEmissionMetadata> = svec![
         &fixture.env,
         ReserveEmissionMetadata {
@@ -97,14 +106,6 @@ pub fn create_fixture_with_data<'a>() -> TestFixture<'a> {
     // fixture.tokens[TokenIndex::XLM].approve(&frodo, &pool_fixture.pool.address, &i128::MAX, &50000);
 
     pool_fixture.treasury.increase_supply(&(100_000_000 * SCALAR_7)); // Treasury supplies 100M stable to pool
-
-    //fixture.create_pair(TokenIndex::OUSD, TokenIndex::USDC);
-    //let pair = &fixture.pairs[0].pair;
-
-    // let deposit_amount = 6_000_0000 * SCALAR_7;
-    // fixture.tokens[TokenIndex::OUSD].mint(&pair.address, &(deposit_amount));
-    // fixture.tokens[TokenIndex::USDC].mint(&pair.address, &(deposit_amount));
-    // pair.deposit(&frodo);
 
     let henk = Address::generate(&fixture.env);
     fixture.users.push(henk.clone());
@@ -145,7 +146,7 @@ mod tests {
         let frodo = fixture.users.get(0).unwrap();
         let henk = fixture.users.get(1).unwrap();
         let treasury_fixture: &PoolFixture = fixture.pools.get(0).unwrap();
-        //let pair = &fixture.pairs[0].pair;
+        let pair = &fixture.pairs[0].pair;
 
         // validate backstop deposit
         assert_eq!(
@@ -163,6 +164,15 @@ mod tests {
         assert_eq!(
             1_000 * SCALAR_7,
             fixture.tokens[TokenIndex::OUSD].balance(&henk)
+        );
+
+        fixture.tokens[TokenIndex::OUSD].transfer(&henk, &pair.address, &(1_000 * SCALAR_7));
+        pair.swap(&(900 * SCALAR_7), &0, &henk);
+
+        // validate swap
+        assert_eq!(
+            900 * SCALAR_7,
+            fixture.tokens[TokenIndex::USDC].balance(&henk)
         );
     }
 }
