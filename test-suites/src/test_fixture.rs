@@ -24,6 +24,7 @@ use crate::dependencies::treasury_factory::{FactoryAsset, create_treasury_factor
 use crate::dependencies::mock_treasury::{create_mock_treasury, MockTreasuryClient};
 use crate::dependencies::mock_pegkeeper::{create_mock_pegkeeper, MockPegkeeperClient};
 use crate::dependencies::mock_receiver::{create_mock_receiver, MockReceiverClient};
+use crate::dependencies::pegkeeper::{create_pegkeeper, PegkeeperClient};
 
 pub const SCALAR_7: i128 = 1_000_0000;
 pub const SCALAR_9: i128 = 1_000_000_000;
@@ -37,7 +38,6 @@ pub enum TokenIndex {
 }
 
 pub struct PoolFixture<'a> {
-    pub treasury: TreasuryClient<'a>,
     pub pool: PoolClient<'a>,
     pub reserves: HashMap<TokenIndex, u32>,
 }
@@ -70,9 +70,8 @@ pub struct TestFixture<'a> {
     pub pools: Vec<PoolFixture<'a>>,
     pub pairs: Vec<PairFixture<'a>>,
     pub tokens: Vec<MockTokenClient<'a>>,
-    pub mock_treasury: MockTreasuryClient<'a>,
-    pub mock_pegkeeper: MockPegkeeperClient<'a>,
-    pub mock_receiver: MockReceiverClient<'a>
+    pub pegkeeper: PegkeeperClient<'a>,
+    pub treasuries: Vec<TreasuryClient<'a>>,
 }
 
 impl TestFixture<'_> {
@@ -160,44 +159,29 @@ impl TestFixture<'_> {
             0_1000000,    // xlm
         ]);
 
-        // deploy Orbit dependencies
-        let (treasury_factory_id, treasury_factory_client) = create_treasury_factory(&e);
-        let (bridge_oracle_id, bridge_oracle_client) = create_bridge_oracle(&e);
-        bridge_oracle_client.initialize(&treasury_factory_id, &oracle_id);
-
-
-        // initialize treasury factory
-        let treasury_hash = e.deployer().upload_contract_wasm(TREASURY_WASM);
-        let treasury_init_meta = TreasuryInitMeta {
-            treasury_hash: treasury_hash.clone(),
-            pool_factory: pool_factory_id.clone(),
-        };
-        treasury_factory_client.initialize(&bombadil, &bridge_oracle_id, &treasury_init_meta);
-
         // Initialize soroswap
-
         let (pair_factory_id, pair_factory_client) = create_pair_factory(&e);
         let pair_hash = e.deployer().upload_contract_wasm(PAIR_WASM);
         let (router_id, router_client) = create_router(&e);
         pair_factory_client.initialize(&bombadil, &pair_hash);
         router_client.initialize(&pair_factory_id);
 
-        // std::println!("===========================Mock Flashloan Initialize Start=========================");
+        // deploy Orbit dependencies
+        let (treasury_factory_id, treasury_factory_client) = create_treasury_factory(&e);
+        let (bridge_oracle_id, bridge_oracle_client) = create_bridge_oracle(&e);
+        let (pegkeeper_id, peg_keeper_client) = create_pegkeeper(&e);
+        bridge_oracle_client.initialize(&treasury_factory_id, &oracle_id);
+        peg_keeper_client.initialize(&treasury_factory_id, &router_id);
 
-        let (mock_treasury_id, mock_treasury_client) = create_mock_treasury(&e);
-        let (mock_pegkeeper_id, mock_pegkeeper_client) = create_mock_pegkeeper(&e);
-        let (mock_receiver_id, mock_receiver_client) = create_mock_receiver(&e);
-
-        mock_treasury_client.initialize(&bombadil, &ousd_id, &blnd_id /* temporary */, &router_id, &blnd_id, &mock_pegkeeper_id);
-        mock_pegkeeper_client.initialize(&bombadil, &0_u64);
-        mock_pegkeeper_client.add_treasury(&ousd_id, &mock_treasury_id);
-        mock_pegkeeper_client.set_receiver(&mock_receiver_id);
-        mock_receiver_client.initialize(&mock_pegkeeper_id);
-
-        // std::println!("===========================Mock Flashloan Initialize End==========================");
-
-        // mock_pegkeeper_client.flash_loan(&ousd_id, &123_i128);
-        // std::println!("{}", e.logs().all().join("\n"));
+        // initialize treasury factory
+        let treasury_hash = e.deployer().upload_contract_wasm(TREASURY_WASM);
+        let treasury_init_meta = TreasuryInitMeta {
+            treasury_hash: treasury_hash.clone(),
+            pegkeeper: pegkeeper_id.clone(),
+            bridge_oracle: bridge_oracle_id.clone(),
+            pool_factory: pool_factory_id.clone(),
+        };
+        treasury_factory_client.initialize(&bombadil, &treasury_init_meta);
 
         let fixture = TestFixture {
             env: e,
@@ -220,17 +204,30 @@ impl TestFixture<'_> {
                 xlm_client,
                 ousd_client,
             ],
-            mock_treasury: mock_treasury_client,
-            mock_pegkeeper: mock_pegkeeper_client,
-            mock_receiver: mock_receiver_client
+            pegkeeper: peg_keeper_client,
+            treasuries: vec![],
         };
         fixture.jump(7 * 24 * 60 * 60);
         fixture
     }
 
-    pub fn create_pool(&mut self, name: Symbol, backstop_take_rate: u32, max_positions: u32) {
+    pub fn create_treasury(&mut self, pool_index: usize, initial_supply: i128) {
         let from = self.tokens[TokenIndex::OUSD].address.clone();
         let to = self.tokens[TokenIndex::USDC].address.clone();
+        let pool_id = &self.pools.get(pool_index).unwrap().pool.address;
+
+        let treasury_id = self.treasury_factory.deploy(
+            &BytesN::<32>::random(&self.env),
+            &from,
+            &FactoryAsset::Stellar(to.clone()),
+            &pool_id,
+            &initial_supply
+        );
+        &self.tokens[TokenIndex::OUSD].set_admin(&treasury_id);
+        self.treasuries.push(TreasuryClient::new(&self.env, &treasury_id));
+    }
+
+    pub fn create_pool(&mut self, name: Symbol, backstop_take_rate: u32, max_positions: u32) {
         let oracle_id = &self.bridge_oracle;
 
         let pool_id = self.pool_factory.deploy(
@@ -241,17 +238,8 @@ impl TestFixture<'_> {
             &backstop_take_rate,
             &max_positions,
         );
-        let ousd_id = &self.tokens[TokenIndex::OUSD];
-        let treasury_id = self.treasury_factory.deploy(
-            &BytesN::<32>::random(&self.env),
-            &from,
-            &FactoryAsset::Stellar(to.clone()),
-            &pool_id
-        );
-        ousd_id.set_admin(&treasury_id);
         self.pools.push(PoolFixture {
             pool: PoolClient::new(&self.env, &pool_id),
-            treasury: TreasuryClient::new(&self.env, &treasury_id),
             reserves: HashMap::new(),
         });
     }

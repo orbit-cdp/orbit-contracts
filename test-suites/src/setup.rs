@@ -94,36 +94,38 @@ pub fn create_fixture_with_data<'a>() -> TestFixture<'a> {
 
     fixture.jump(60);
 
+    fixture.create_treasury(0, 1000000000 * SCALAR_7);
+
     // fixture.tokens[TokenIndex::XLM].approve(&frodo, &pool_fixture.pool.address, &i128::MAX, &50000);
 
-    pool_fixture.treasury.increase_supply(&(100_000_000 * SCALAR_7)); // Treasury supplies 100M stable to pool
+    //pool_fixture.treasury.increase_supply(&(100_000_000 * SCALAR_7)); // Treasury supplies 100M stable to pool
 
-    //fixture.create_pair(TokenIndex::OUSD, TokenIndex::USDC);
-    //let pair = &fixture.pairs[0].pair;
+    fixture.create_pair(TokenIndex::OUSD, TokenIndex::USDC);
+    let pair = &fixture.pairs[0].pair;
 
-    // let deposit_amount = 6_000_0000 * SCALAR_7;
-    // fixture.tokens[TokenIndex::OUSD].mint(&pair.address, &(deposit_amount));
-    // fixture.tokens[TokenIndex::USDC].mint(&pair.address, &(deposit_amount));
-    // pair.deposit(&frodo);
+    let deposit_amount = 6_000_0000 * SCALAR_7;
+    fixture.tokens[TokenIndex::OUSD].mint(&pair.address, &(deposit_amount));
+    fixture.tokens[TokenIndex::USDC].mint(&pair.address, &(deposit_amount));
+    pair.deposit(&frodo);
 
-    let henk = Address::generate(&fixture.env);
-    fixture.users.push(henk.clone());
-    fixture.tokens[TokenIndex::XLM].mint(&henk, &(100_000 * SCALAR_7)); // 100k XLM
-
-    let requests = svec![
-        &fixture.env,
-        Request {
-            request_type: RequestType::SupplyCollateral as u32,
-            address: fixture.tokens[TokenIndex::XLM].address.clone(),
-            amount: 50_000 * SCALAR_7,
-        },
-        Request {
-            request_type: RequestType::Borrow as u32,
-            address: fixture.tokens[TokenIndex::OUSD].address.clone(),
-            amount: 1_000 * SCALAR_7,
-        },
-    ];
-    pool_fixture.pool.submit(&henk, &henk, &henk, &requests);
+    // let henk = Address::generate(&fixture.env);
+    // fixture.users.push(henk.clone());
+    // fixture.tokens[TokenIndex::XLM].mint(&henk, &(100_000 * SCALAR_7)); // 100k XLM
+    //
+    // let requests = svec![
+    //     &fixture.env,
+    //     Request {
+    //         request_type: RequestType::SupplyCollateral as u32,
+    //         address: fixture.tokens[TokenIndex::XLM].address.clone(),
+    //         amount: 50_000 * SCALAR_7,
+    //     },
+    //     Request {
+    //         request_type: RequestType::Borrow as u32,
+    //         address: fixture.tokens[TokenIndex::OUSD].address.clone(),
+    //         amount: 1_000 * SCALAR_7,
+    //     },
+    // ];
+    // pool_fixture.pool.submit(&henk, &henk, &henk, &requests);
 
     fixture.jump(60 * 60); // 1 hr
 
@@ -134,6 +136,7 @@ pub fn create_fixture_with_data<'a>() -> TestFixture<'a> {
 #[cfg(test)]
 mod tests {
     use soroban_sdk::testutils::{Events, Logs};
+    use crate::test_fixture::PoolFixture;
 
 
     #[test]
@@ -142,65 +145,14 @@ mod tests {
 
         use super::*;
 
-        let fixture = TestFixture::create();
-        // let frodo = fixture.users.get(0).unwrap();
+        let fixture = create_fixture_with_data();
+        let frodo = fixture.users.get(0).unwrap();
+        let pegkeeper = fixture.pegkeeper;
         // let henk = fixture.users.get(1).unwrap();
-        // let treasury_fixture: &PoolFixture = fixture.pools.get(0).unwrap();
+        let treasury_fixture: &PoolFixture = fixture.pools.get(0).unwrap();
+
+        pegkeeper.flash_loan(&frodo, &fixture.tokens[TokenIndex::OUSD].address, &fixture.tokens[TokenIndex::XLM].address, &fixture.tokens[TokenIndex::USDC].address, &(1_000 * SCALAR_7));
         //let pair = &fixture.pairs[0].pair;
 
-        let token_address = &fixture.tokens[TokenIndex::OUSD].address;
-        // std::println!("****  Mock pegkeeper {:?}", fixture.mock_pegkeeper.address.to_string());
-        // std::println!("****  Mock treasury {:?}", fixture.mock_treasury.address.to_string());
-        // std::println!("****  Mock receiver {:?}", fixture.mock_receiver.address.to_string());
-        // std::println!("****  Borrow token address {:?}", token_address.clone().to_string());
-        // std::println!("****  Treasury address for token {:?}", fixture.mock_pegkeeper.get_treasury(&token_address));
-        // std::println!("****  Pegkeeper address for Treasury {:?}", fixture.mock_treasury.get_pegkeeper_address());
-        // std::println!("****  Receiver address for Pegkeeper {:?}", fixture.mock_pegkeeper.get_receiver());
-
-        fixture.mock_pegkeeper.flash_loan(&token_address, &1000i128);
-        std::println!("=====================================FlashLoan Logs Start===========================================");
-        std::println!("{:?}", fixture.env.logs().all().join("\n"));
-        std::println!("=====================================FlashLoan Logs End===========================================");
-        // std::println!("treasury => {:?}", fixture.mock_treasury.env.logs().all());
-        // std::println!("pegkeeper => {:?}", fixture.mock_pegkeeper.env.logs().all());
-        // // fixture.mock_pegkeeper.flashloan_receive(&fixture.tokens[TokenIndex::OUSD].address, &100i128);
-        
-        // let logs = fixture.env.logs().all();
-        // std::println!("****  Logs length {}", logs.len());
-        // for log in logs {
-        //     std::println!("****  log - {:?}", log);
-        // }
-        // let events = fixture.env.events().all();
-        // // std::println!("**** Events contract address {:?}", fixture.env.current_contract_address());
-        // std::println!("****  Events length {}", fixture.mock_pegkeeper.env.events().all().len());
-        // for event in events {
-        //     let list = event.1;
-        //     std::println!("****  Event {:?}", event.0);
-        //     for item in list {
-        //         std::println!("****  Item {:?}", item);
-        //     }
-        //     std::println!("****  Event Lst {:?}", event.2);
-        // }
-
-        // let env = Env::default();
-        // log!(&env, "Hi you {}", "apple".to_string());
-        // std::println!("{}", env.logs().all().join("\n"));
-        // validate backstop deposit
-        // assert_eq!(
-        //     50_000 * SCALAR_7,
-        //     fixture.lp.balance(&fixture.backstop.address)
-        // );
-
-        // // validate collateral deposit
-        // assert_eq!(
-        //     50_000 * SCALAR_7,
-        //     fixture.tokens[TokenIndex::XLM].balance(&henk)
-        // );
-
-        // // validate borrow
-        // assert_eq!(
-        //     1_000 * SCALAR_7,
-        //     fixture.tokens[TokenIndex::OUSD].balance(&henk)
-        // );
     }
 }

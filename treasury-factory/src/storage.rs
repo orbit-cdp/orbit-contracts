@@ -10,7 +10,6 @@ const LEDGER_BUMP_PERSISTENT: u32 = LEDGER_THRESHOLD_PERSISTENT + 20 * ONE_DAY_L
 
 const ADMIN_KEY: &str = "Admin";
 const BRIDGE_ORACLE_KEY: &str = "Oracle";
-const SOROSWAP_KEY: &str = "Soroswap";
 const TREASURY_META_KEY: &str = "TreasuryMeta";
 
 #[derive(Clone)]
@@ -23,6 +22,8 @@ pub enum TreasuryFactoryDataKey {
 #[contracttype]
 pub struct TreasuryInitMeta {
     pub treasury_hash: BytesN<32>,
+    pub pegkeeper: Address,
+    pub bridge_oracle: Address,
     pub pool_factory: Address,
 }
 
@@ -77,27 +78,6 @@ pub fn set_bridge_oracle(e: &Env, new_bridge_oracle: &Address) {
         .instance()
         .set::<Symbol, Address>(&Symbol::new(e, BRIDGE_ORACLE_KEY), new_bridge_oracle);
 }
-
-/// Fetch the current soroswap Address
-///
-/// ### Panics
-/// If the bridge soroswap does not exist
-pub fn get_soroswap(e: &Env) -> Address {
-    e.storage()
-        .instance()
-        .get::<Symbol, Address>(&Symbol::new(e, SOROSWAP_KEY))
-        .unwrap_optimized()
-}
-
-/// Set a new soroswap
-///
-/// ### Arguments
-/// * `new_soroswap_address` - The Address for the soroswap
-// pub fn set_soroswap(e: &Env, new_soroswap_address: &Address) {
-//     e.storage()
-//         .instance()
-//         .set::<Symbol, Address>(&Symbol::new(e, SOROSWAP_KEY), new_soroswap_address);
-// }
 
 /// Fetch the pool initialization metadata
 pub fn get_pool_init_meta(e: &Env) -> TreasuryInitMeta {

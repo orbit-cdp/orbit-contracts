@@ -1,6 +1,6 @@
 mod treasury_contract {
     soroban_sdk::contractimport!(
-        file = "../wasm/treasury.wasm"
+        file = "../wasm/treasury2.wasm"
     );
 }
 

@@ -18,7 +18,7 @@ pub trait TreasuryFactory {
     /// # Arguments
     /// * `admin` - The admin address
     /// * `treasury_init_meta` - The treasury init meta
-    fn initialize(e: Env, admin: Address, bridge_oracle: Address, treasury_init_meta: TreasuryInitMeta);
+    fn initialize(e: Env, admin: Address, treasury_init_meta: TreasuryInitMeta);
 
     /// (Admin only) Deploys a new treasury with token and pool
     ///
@@ -26,7 +26,7 @@ pub trait TreasuryFactory {
     /// * `salt` - The salt for the deployment
     /// * `token_address` - The token address
     /// * `blend_pool` - The blend pool address
-    fn deploy(e: Env, salt: BytesN<32>, token_address: Address, asset: Asset, blend_pool: Address, collateral_token_address: Address, pegkeeper: Address) -> Address;
+    fn deploy(e: Env, salt: BytesN<32>, token_address: Address, asset: Asset, blend_pool: Address, initial_supply: i128) -> Address;
 
     /// (Admin only) Set a new address as the admin of this pool
     ///
@@ -60,27 +60,26 @@ pub trait TreasuryFactory {
 
 #[contractimpl]
 impl TreasuryFactory for TreasuryFactoryContract {
-    fn initialize(e: Env, admin: Address, bridge_oracle: Address, treasury_init_meta: TreasuryInitMeta) {
+    fn initialize(e: Env, admin: Address, treasury_init_meta: TreasuryInitMeta) {
         storage::extend_instance(&e);
         if storage::is_init(&e) {
             panic_with_error!(&e, TreasuryFactoryError::AlreadyInitializedError);
         }
 
-        storage::set_bridge_oracle(&e, &bridge_oracle);
         storage::set_pool_init_meta(&e, &treasury_init_meta);
         storage::set_admin(&e, &admin);
 
-        e.events().publish(("TreasuryFactory", Symbol::new(&e, "init")), (admin.clone(), bridge_oracle.clone(), treasury_init_meta.clone()));
+        e.events().publish(("TreasuryFactory", Symbol::new(&e, "init")), (admin.clone(), treasury_init_meta.clone()));
     }
 
-    fn deploy(e: Env, salt: BytesN<32>, token_address: Address, asset: Asset, blend_pool: Address, collateral_token_address: Address, pegkeeper: Address) -> Address {
+    fn deploy(e: Env, salt: BytesN<32>, token_address: Address, asset: Asset, blend_pool: Address, initial_supply: i128) -> Address {
         storage::extend_instance(&e);
         let admin = storage::get_admin(&e);
         admin.require_auth();
+        let treasury_init_meta = storage::get_pool_init_meta(&e);
 
         // Add the asset to the bridge oracle
-        let bridge_oracle = storage::get_bridge_oracle(&e);
-        let soroswap = storage::get_soroswap(&e);
+        let bridge_oracle = treasury_init_meta.bridge_oracle;
         let token_asset = Asset::Stellar(token_address.clone());
         let bridge_oracle_args: Vec<Val> = vec![
             &e,
@@ -88,22 +87,34 @@ impl TreasuryFactory for TreasuryFactoryContract {
             asset.into_val(&e),
         ];
         e.invoke_contract::<Val>(&bridge_oracle, &Symbol::new(&e, "add_asset"), bridge_oracle_args);
+
         // Deploy the treasury
-        let treasury_init_meta = storage::get_pool_init_meta(&e);
         let treasury_hash = treasury_init_meta.treasury_hash;
+        let pegkeeper = treasury_init_meta.pegkeeper;
         let treasury_id = e.deployer().with_current_contract(salt).deploy(treasury_hash);
         let treasury_init_args = vec![
             &e,
             admin.into_val(&e),
             token_address.into_val(&e),
             blend_pool.into_val(&e),
-            soroswap.into_val(&e),
-            collateral_token_address.into_val(&e),
-            pegkeeper.into_val(&e)
+            pegkeeper.into_val(&e),
         ];
         e.invoke_contract::<Val>(&treasury_id, &Symbol::new(&e, "initialize"), treasury_init_args);
-        
         storage::set_deployed(&e, &treasury_id);
+
+        // Mint initial supply
+        let treasury_supply_args = vec![
+            &e,
+            initial_supply.into_val(&e),
+        ];
+        e.invoke_contract::<Val>(&treasury_id, &Symbol::new(&e, "increase_supply"), treasury_supply_args);
+
+        let pegkeeper_args = vec![
+            &e,
+            token_address.into_val(&e),
+            treasury_id.into_val(&e),
+        ];
+        e.invoke_contract::<Val>(&pegkeeper, &Symbol::new(&e, "add_treasury"), pegkeeper_args);
 
         e.events().publish(("TreasuryFactory", Symbol::new(&e, "deploy")), treasury_id.clone());
         treasury_id

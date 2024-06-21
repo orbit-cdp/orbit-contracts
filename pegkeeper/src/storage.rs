@@ -10,8 +10,7 @@ const LEDGER_BUMP_INSTANCE: u32 = LEDGER_THRESHOLD_INSTANCE + ONE_DAY_LEDGERS; /
 pub enum DataKey {
     ADMIN,
     TREASURY(Address), // mapping token address to treasury addres
-    BALANCE,
-    MAXIMUMDURATION,
+    ROUTER,
 }
 /// Bump the instance rent for the contract
 pub fn extend_instance(e: &Env) {
@@ -65,40 +64,23 @@ pub fn set_treasury(e: &Env, token_address: Address, treasury_address: &Address)
         .set(&DataKey::TREASURY(token_address), treasury_address);
 }
 
-/// Fetch the current balance
+/// Fetch the current router Address
 ///
-pub fn get_balance(e: &Env) -> i128 {
+/// ### Panics
+/// If the router does not exist
+pub fn get_router(e: &Env) -> Address {
     e.storage()
         .instance()
-        .get(&DataKey::BALANCE)
+        .get(&DataKey::ROUTER)
         .unwrap_optimized()
 }
 
-/// Set the token balance
+/// Set the router Address
 ///
 /// ### Arguments
-/// * `balance` - The balance of the contract
-pub fn set_balance(e: &Env, balance: &i128) {
+/// * `router_address` - The Address for the router
+pub fn set_router(e: &Env, router_address: &Address) {
     e.storage()
         .instance()
-        .set(&DataKey::BALANCE, balance);
-}
-
-/// Fetch the maximum duration for swap transaction
-///
-pub fn get_maximum_duration(e: &Env) -> u64 {
-    e.storage()
-        .instance()
-        .get(&DataKey::MAXIMUMDURATION)
-        .unwrap_optimized()
-}
-
-/// Set the maximum duration for swap transaction
-///
-/// ### Arguments
-/// * `maximum_duration` - The maximum_duration for swap transaction
-pub fn set_maximum_duration(e: &Env, maximum_duration: &u64) {
-    e.storage()
-        .instance()
-        .set(&DataKey::MAXIMUMDURATION, maximum_duration);
+        .set(&DataKey::ROUTER, router_address);
 }

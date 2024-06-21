@@ -180,60 +180,27 @@ impl MockTreasury for MockTreasuryContract {
         //e.events().publish(Symbol::new(&e, "increase_supply"), admin);
     }
 
-    fn decrease_supply(e: Env, amount: i128) {
-        storage::extend_instance(&e);
-        let admin = storage::get_admin(&e);
-        admin.require_auth();
-
-        let supply = storage::get_token_supply(&e);
-        if supply < amount {
-            panic_with_error!(&e, MockTreasuryError::SupplyError);
-        }
-
-        let token = storage::get_token(&e);
-        let blend = storage::get_blend(&e);
-        let pool_client = PoolClient::new(&e, &blend);
-        
-        let position = pool_client.get_positions(&e.current_contract_address()).supply;
-        let position_amount = position.get(0).unwrap(); // Assuming the token indedx of the stable coin is 0
-        if position_amount < amount {
-            panic_with_error!(&e, MockTreasuryError::SupplyError);
-        }
-
-        pool_client.submit(&e.current_contract_address(), &e.current_contract_address(), &e.current_contract_address(), &vec![
-            &e,
-            Request {
-                request_type: 1_u32, // WITHDRAW RequestType
-                address: token.clone(),
-                amount,
-            },
-        ]);
-        let burn_args: Vec<Val> = vec![
-            &e,
-            e.current_contract_address().into_val(&e),
-            amount.into_val(&e),
-        ];
-        e.invoke_contract::<Val>(&token, &Symbol::new(&e, "burn"), burn_args);
-        let supply = storage::get_token_supply(&e);
-        let new_supply = supply - amount;
-        storage::set_token_supply(&e, &new_supply);
-
-        //e.events().publish(Symbol::new(&e, "decrease_supply"), admin);
-    }
-
     fn fl_loan(e: Env, receiver_address: Address, amount: i128) -> Result<(), MockTreasuryError> {
         storage::extend_instance(&e);
-        
+
+        let pegkeeper: Address = storage::get_pegkeeper(&e);
+
+        pegkeeper.require_auth();
+        //check if caller is pegkeeper
+        if pegkeeper != e.current_contract_address() {
+            panic_with_error!(&e, MockTreasuryError::UnauthorizedError);
+        }
+
         log!(&e, "================================= Treasury FlashLoan Function Start ============================");
         // check_amount_current(amount)?; // temporary
 
         let token_client = get_token_client(&e);
 
-        // transfer(&e, &token_client, &receiver_address, &amount); // temporary
+        transfer(&e, &token_client, &receiver_address, &amount); // temporary
         // let fee = compute_fee(&amount);
-        let fee = 100_i128;
+        //let fee = 100_i128;
 
-        MockReceiverClient::new(&e, &receiver_address).execute_operation(&e.current_contract_address(), &token_client.address, &amount, &fee);
+        MockReceiverClient::new(&e, &receiver_address).execute_operation(&e.current_contract_address(), &token_client.address, &amount);
 
         log!(&e, "================================= Treasury FlashLoan Function End ============================");
 

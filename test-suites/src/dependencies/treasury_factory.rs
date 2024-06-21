@@ -1,7 +1,7 @@
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 mod treasury_factory_contract {
-    soroban_sdk::contractimport!(file = "../wasm/treasury_factory.wasm");
+    soroban_sdk::contractimport!(file = "../wasm/treasury_factory2.wasm");
 }
 pub use treasury_factory_contract::{Asset as FactoryAsset, Client as TreasuryFactoryClient, WASM as TREASURY_FACTORY_WASM, TreasuryInitMeta};
 
