@@ -186,7 +186,7 @@ impl TestFixture<'_> {
 
         // deploy Orbit dependencies
         let (bridge_oracle_id, bridge_oracle_client) = create_bridge_oracle(&e);
-        // bridge_oracle_client.initialize(&treasury_factory_id, &bridge_oracle_id);
+        bridge_oracle_client.initialize(&mock_treasury_id, &bridge_oracle_id);
 
         // Initialize soroswap
 
@@ -237,23 +237,13 @@ impl TestFixture<'_> {
             &self.admin,
             &name,
             &BytesN::<32>::random(&self.env),
-            &self.oracle.address.clone(),
+            &self.oracle.address,
             &backstop_take_rate,
             &max_positions,
         );
-
         self.pools.push(PoolFixture {
             pool: PoolClient::new(&self.env, &pool_id),
             reserves: HashMap::new(),
-        });
-    }
-
-    pub fn create_pair(&mut self, token_a: TokenIndex, token_b: TokenIndex) {
-        let token_a_id = &self.tokens[token_a].address;
-        let token_b_id = &self.tokens[token_b].address;
-        let pair_id = self.pair_factory.create_pair(token_a_id, token_b_id);
-        self.pairs.push(PairFixture {
-            pair: PairClient::new(&self.env, &pair_id),
         });
     }
 
